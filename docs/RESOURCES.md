@@ -100,6 +100,19 @@ resource "sendgrid_domain_authentication" "example" {
 }
 ```
 
+### sendgrid_domain_authentication_subuser
+
+Associates an authenticated domain of the parent account with a subuser, without creating new DNS records.
+
+**Example:**
+
+```hcl
+resource "sendgrid_domain_authentication_subuser" "example" {
+  domain_id = sendgrid_domain_authentication.example.id
+  username  = sendgrid_subuser.example.username
+}
+```
+
 ### sendgrid_link_branding
 
 Manages link branding (formerly link whitelabel).

@@ -184,7 +184,7 @@ func resourceSendgridDomainAuthenticationCreate(
 	return resourceSendgridDomainAuthenticationRead(ctx, d, m)
 }
 
-func resourceSendgridDomainAuthenticationRead( //nolint:funlen,cyclop
+func resourceSendgridDomainAuthenticationRead(
 	ctx context.Context,
 	d *schema.ResourceData,
 	m interface{},
@@ -201,6 +201,24 @@ func resourceSendgridDomainAuthenticationRead( //nolint:funlen,cyclop
 		return diag.FromErr(err.Err)
 	}
 
+	onBehalfOf := d.Get("sub_user_on_behalf_of").(string)
+	if len(onBehalfOf) > 0 {
+		c.OnBehalfOf = onBehalfOf
+	}
+
+	if er := setDomainAuthenticationState(d, auth); er != nil {
+		return diag.FromErr(er)
+	}
+
+	return nil
+}
+
+// setDomainAuthenticationState copies an authenticated domain into state. It is
+// shared by the resource and the data source.
+func setDomainAuthenticationState( //nolint:funlen,cyclop
+	d *schema.ResourceData,
+	auth *sendgrid.DomainAuthentication,
+) error {
 	//nolint:errcheck
 	d.Set("domain", auth.Domain)
 	//nolint:errcheck
@@ -221,13 +239,8 @@ func resourceSendgridDomainAuthenticationRead( //nolint:funlen,cyclop
 		ips[idx] = ip
 	}
 
-	onBehalfOf := d.Get("sub_user_on_behalf_of").(string)
-	if len(onBehalfOf) > 0 {
-		c.OnBehalfOf = onBehalfOf
-	}
-
 	if er := d.Set("ips", schema.NewSet(d.Get("ips").(*schema.Set).F, ips)); er != nil {
-		return diag.FromErr(er)
+		return er
 	}
 
 	dns := make([]interface{}, 0)
@@ -285,11 +298,7 @@ func resourceSendgridDomainAuthenticationRead( //nolint:funlen,cyclop
 		})
 	}
 
-	if er := d.Set("dns", dns); er != nil {
-		return diag.FromErr(er)
-	}
-
-	return nil
+	return d.Set("dns", dns)
 }
 
 func resourceSendgridDomainAuthenticationUpdate(

@@ -98,6 +98,10 @@ var (
 
 	ErrFailedDeletingDomainAuthentication = errors.New("failed deleting domain authentication")
 
+	ErrFailedAssociatingDomainAuthentication = errors.New("failed associating domain authentication with subuser")
+
+	ErrFailedDisassociatingDomainAuthentication = errors.New("failed disassociating domain authentication from subuser")
+
 	ErrLinkBrandingIDRequired = errors.New("link branding id is required")
 
 	ErrFailedDeletingLinkBranding = errors.New("failed to delete link branding")

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 )
 
 type DomainAuthenticationDNS struct {
@@ -219,6 +220,126 @@ func (c *Client) DeleteDomainAuthentication(ctx context.Context, id string) (boo
 			StatusCode: statusCode,
 			Err: fmt.Errorf("%w, status: %d, response: %s",
 				ErrFailedDeletingDomainAuthentication, statusCode, responseBody),
+		}
+	}
+
+	return true, RequestError{StatusCode: http.StatusOK, Err: nil}
+}
+
+// ListDomainAuthentications lists the parent account's authenticated domains
+// matching domain. Domains created by or on behalf of subusers are excluded.
+func (c *Client) ListDomainAuthentications(ctx context.Context, domain string) ([]DomainAuthentication, RequestError) {
+	if domain == "" {
+		return nil, RequestError{
+			StatusCode: http.StatusInternalServerError,
+			Err:        ErrNameRequired,
+		}
+	}
+
+	endpoint := "/whitelabel/domains?exclude_subusers=true&domain=" + url.QueryEscape(domain)
+
+	respBody, statusCode, err := c.Get(ctx, "GET", endpoint)
+	if err != nil {
+		return nil, RequestError{
+			StatusCode: statusCode,
+			Err:        fmt.Errorf("failed listing domain authentications: %w", err),
+		}
+	}
+
+	var domains []DomainAuthentication
+	if err := json.Unmarshal([]byte(respBody), &domains); err != nil {
+		return nil, RequestError{
+			StatusCode: http.StatusInternalServerError,
+			Err:        fmt.Errorf("failed parsing domain authentications: %w", err),
+		}
+	}
+
+	return domains, RequestError{StatusCode: http.StatusOK, Err: nil}
+}
+
+// AssociateDomainAuthenticationWithSubuser lets a subuser send with an
+// authenticated domain owned by the parent account, so the subuser can use it
+// without a domain (and DNS records) of its own.
+func (c *Client) AssociateDomainAuthenticationWithSubuser(
+	ctx context.Context,
+	domainID string,
+	username string,
+) (*DomainAuthentication, RequestError) {
+	if domainID == "" {
+		return nil, RequestError{
+			StatusCode: http.StatusInternalServerError,
+			Err:        ErrDomainAuthenticationIDRequired,
+		}
+	}
+
+	if username == "" {
+		return nil, RequestError{
+			StatusCode: http.StatusInternalServerError,
+			Err:        ErrUsernameRequired,
+		}
+	}
+
+	endpoint := "/whitelabel/domains/" + domainID + "/subuser"
+	body := map[string]string{"username": username}
+
+	respBody, statusCode, err := c.Post(ctx, "POST", endpoint, body)
+	if err != nil {
+		return nil, RequestError{
+			StatusCode: statusCode,
+			Err:        fmt.Errorf("%w: %w", ErrFailedAssociatingDomainAuthentication, err),
+		}
+	}
+
+	return ParseDomainAuthentication(respBody)
+}
+
+// ReadSubuserDomainAuthentication returns the authenticated domain associated
+// with a subuser.
+func (c *Client) ReadSubuserDomainAuthentication(
+	ctx context.Context,
+	username string,
+) (*DomainAuthentication, RequestError) {
+	if username == "" {
+		return nil, RequestError{
+			StatusCode: http.StatusInternalServerError,
+			Err:        ErrUsernameRequired,
+		}
+	}
+
+	endpoint := "/whitelabel/domains/subuser?username=" + url.QueryEscape(username)
+
+	respBody, statusCode, err := c.Get(ctx, "GET", endpoint)
+	if err != nil {
+		return nil, RequestError{
+			StatusCode: statusCode,
+			Err:        fmt.Errorf("failed reading subuser domain authentication: %w", err),
+		}
+	}
+
+	return ParseDomainAuthentication(respBody)
+}
+
+// DisassociateDomainAuthenticationFromSubuser removes the authenticated domain
+// associated with a subuser. The domain itself is kept.
+func (c *Client) DisassociateDomainAuthenticationFromSubuser(
+	ctx context.Context,
+	username string,
+) (bool, RequestError) {
+	if username == "" {
+		return false, RequestError{
+			StatusCode: http.StatusInternalServerError,
+			Err:        ErrUsernameRequired,
+		}
+	}
+
+	endpoint := "/whitelabel/domains/subuser?username=" + url.QueryEscape(username)
+
+	responseBody, statusCode, err := c.Get(ctx, "DELETE", endpoint)
+	if err != nil && statusCode != http.StatusNotFound { // already gone
+		return false, RequestError{
+			StatusCode: statusCode,
+			Err: fmt.Errorf("%w, status: %d, response: %s, err: %w",
+				ErrFailedDisassociatingDomainAuthentication, statusCode, responseBody, err),
 		}
 	}
 
